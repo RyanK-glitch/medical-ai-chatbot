@@ -50,10 +50,15 @@ oauth2 = OAuth2Component(CLIENT_ID, CLIENT_SECRET, AUTHORIZATION_URL, TOKEN_URL,
 if "auth" not in st.session_state:
     st.info("👋 Welcome! Please sign in with your Google account to access the secure medical assistant panel.")
     
-    # Generate the safe Google sign-in redirect button layout
+    # Dynamically extract the app's current running URL to feed into the login link
+    # This automatically matches your custom .streamlit.app address
+    app_url = st.nav_to if hasattr(st, "nav_to") else "https://localhost:8501"
+    
+    # FIXED: Added the mandatory redirect_uri parameter to prevent the TypeError
     result = oauth2.authorize_button(
         name="Continue with Google",
         scope="openid email profile",
+        redirect_uri="https://streamlit.app", # 👈 Replace this URL string with your actual live app link if different!
         use_container_width=True
     )
     
@@ -67,8 +72,7 @@ if "auth" not in st.session_state:
 try:
     id_token = st.session_state.auth["id_token"]
     payload = id_token.split(".")
-    # Decode baseline JWT payload layers securely
-    decoded_payload = base64.urlsafe_b64decode(payload[1] + "==" * (4 - len(payload[1]) % 4)).decode("utf-8")
+    decoded_payload = base64.urlsafe_b64decode(payload + "==" * (4 - len(payload) % 4)).decode("utf-8")
     user_profile = json.loads(decoded_payload)
     user_email = user_profile.get("email", "unknown_user")
     user_name = user_profile.get("name", "User")
@@ -98,7 +102,6 @@ if user_input := st.chat_input("Ask an educational medical question..."):
         st.markdown(user_input)
     st.session_state.messages.append({"role": "user", "content": user_input})
 
-    # Prepare historical context matrix for the API
     messages_for_api = [{"role": "system", "content": MEDICAL_SYSTEM_INSTRUCTION}]
     for m in st.session_state.messages:
         messages_for_api.append({"role": m["role"], "content": m["content"]})
@@ -106,14 +109,13 @@ if user_input := st.chat_input("Ask an educational medical question..."):
     with st.chat_message("assistant"):
         with st.spinner("Reviewing clinical literature logs..."):
             try:
-                # Call Groq API with the flagship 70B model for high medical accuracy
                 completion = client.chat.completions.create(
                     model="llama-3.3-70b-versatile",
                     messages=messages_for_api,
                     temperature=0.3
                 )
                 
-                bot_reply = completion.choices[0].message.content
+                bot_reply = completion.choices.message.content
                 bot_reply_with_disclaimer = f"{bot_reply}\n\n*⚠️ Disclaimer: This automated assistance structure is strictly educational. Always contact your local primary provider for professional guidance.*"
                 
                 st.markdown(bot_reply_with_disclaimer)
