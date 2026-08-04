@@ -34,8 +34,9 @@ CRITICAL SAFETY RULES:
 5. If the user asks about completely non-medical topics, politely refuse and guide them back to health queries.
 """
 
-# 3. Handle User Authorization Firewall Using Correct Streamlit Auth API
-if not st.user.is_logged_in:
+# 3. Handle User Authorization Firewall Using Dict-Style Syntax
+# FIXED: Changed from .is_logged_in to dictionary bracket lookups to satisfy the Streamlit core engine
+if not st.user.get("is_logged_in", False):
     st.info("👋 Welcome! Please sign in with your Google account to access the secure medical assistant panel.")
     
     # Native login engine - completely stable connection
@@ -43,7 +44,7 @@ if not st.user.is_logged_in:
         st.login("google")
     st.stop()
 
-# Get User Profile details natively from the login token
+# Get User Profile details natively from the dictionary attributes
 user_name = st.user.get("name", "User")
 user_email = st.user.get("email", "unknown_user")
 
@@ -82,7 +83,7 @@ if user_input := st.chat_input("Ask an educational medical question..."):
                     temperature=0.3
                 )
                 
-                bot_reply = completion.choices.message.content
+                bot_reply = completion.choices[0].message.content
                 bot_reply_with_disclaimer = f"{bot_reply}\n\n*⚠️ Disclaimer: This automated assistance structure is strictly educational. Always contact your local primary provider for professional guidance.*"
                 
                 st.markdown(bot_reply_with_disclaimer)
