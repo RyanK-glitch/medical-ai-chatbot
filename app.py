@@ -1,6 +1,5 @@
 import streamlit as st
-from google import genai
-from google.genai import types
+from groq import Groq
 
 # 1. Web Interface Layout & Emergency Warning Banner
 st.set_page_config(page_title="Medical AI Assistant", page_icon="🩺")
@@ -11,18 +10,19 @@ st.error("🚨 **EMERGENCY NOTICE:** If you are experiencing a life-threatening 
 st.title("🩺 Medical & Health Information Assistant")
 st.caption("An educational AI tool designed to explain health concepts and medical terms clearly.")
 
-# 2. Connect to Google GenAI using Streamlit Secrets
-if "GEMINI_API_KEY" in st.secrets:
-    GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
+# 2. Connect to Groq using Streamlit Secrets
+# Since we are using Groq, remember to add your GROQ_API_KEY ("gsk_...") to your Streamlit Advanced Settings!
+if "GROQ_API_KEY" in st.secrets:
+    GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 else:
-    GEMINI_API_KEY = st.sidebar.text_input("Enter Gemini API Key:", type="password")
+    GROQ_API_KEY = st.sidebar.text_input("Enter Groq API Key:", type="password")
 
-if not GEMINI_API_KEY:
-    st.info("Please add your Gemini API key in the Streamlit Advanced Settings to continue.")
+if not GROQ_API_KEY:
+    st.info("Please add your Groq API key in the Streamlit Advanced Settings to continue.")
     st.stop()
 
-# Initialize the official Google GenAI client
-client = genai.Client(api_key=GEMINI_API_KEY)
+# Initialize the official Groq client
+client = Groq(api_key=GROQ_API_KEY)
 
 # 3. Strict Medical System Instructions
 MEDICAL_SYSTEM_INSTRUCTION = """
@@ -53,26 +53,22 @@ if user_input := st.chat_input("Ask a medical question (e.g., Explain what a sod
         st.markdown(user_input)
     st.session_state.messages.append({"role": "user", "content": user_input})
 
-    # Prepare message history for Gemini API
-    api_messages = []
+    # Prepare message history for Groq API
+    messages_for_api = [{"role": "system", "content": MEDICAL_SYSTEM_INSTRUCTION}]
     for m in st.session_state.messages:
-        role = "model" if m["role"] == "assistant" else "user"
-        api_messages.append({"role": role, "parts": [{"text": m["content"]}]})
+        messages_for_api.append({"role": m["role"], "content": m["content"]})
 
     with st.chat_message("assistant"):
         with st.spinner("Analyzing medical literature..."):
             try:
-                # Call Gemini 2.5 Flash with the safety config parameters
-                response = client.models.generate_content(
-                    model="gemini-2.0-flash",
-                    contents=api_messages,
-                    config=types.GenerateContentConfig(
-                        system_instruction=MEDICAL_SYSTEM_INSTRUCTION,
-                        temperature=0.3  # Low temperature keeps responses factual
-                    )
+                # Call Groq with the lightning-fast, free llama-3.1 model
+                completion = client.chat.completions.create(
+                    model="llama-3.1-8b-instant",
+                    messages=messages_for_api,
+                    temperature=0.3  # Low temperature keeps responses factual
                 )
                 
-                bot_reply = response.text
+                bot_reply = completion.choices[0].message.content
                 bot_reply_with_disclaimer = f"{bot_reply}\n\n*⚠️ Disclaimer: This information is educational. Always consult a healthcare provider for medical choices.*"
                 
                 st.markdown(bot_reply_with_disclaimer)
