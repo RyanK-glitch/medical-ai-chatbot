@@ -1,39 +1,135 @@
 import streamlit as st
 from groq import Groq
+from streamlit_oauth import OAuth2Component
+import json
+import base64
 
-# 1. Web Interface Layout & Emergency Warning Banner
-st.set_page_config(page_title="Medical AI Assistant", page_icon="🩺")
+# 1. Main Page Layout Configuration
+st.set_page_config(page_title="Secure Medical AI", page_icon="🩺", layout="centered")
 
-# Permanent red safety warning at the top of the app screen
-st.error("🚨 **EMERGENCY NOTICE:** If you are experiencing a life-threatening medical emergency (like severe chest pain or shortness of breath), please call your local emergency services immediately.")
+# Emergency Warning Banner
+st.error("🚨 **EMERGENCY NOTICE:** If you are experiencing a life-threatening medical emergency, please call your local emergency services immediately.")
 
 st.title("🩺 Medical & Health Information Assistant")
-st.caption("An educational AI tool designed to explain health concepts and medical terms clearly.")
+st.caption("A secure, multi-user educational assistant powered by Google Login and Groq.")
 
-# 2. Connect to Groq using Streamlit Secrets
-# Since we are using Groq, remember to add your GROQ_API_KEY ("gsk_...") to your Streamlit Advanced Settings!
-if "GROQ_API_KEY" in st.secrets:
+# 2. Extract Secrets Configuration Check
+try:
+    CLIENT_ID = st.secrets["GOOGLE_CLIENT_ID"]
+    CLIENT_SECRET = st.secrets["GOOGLE_CLIENT_SECRET"]
     GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
-else:
-    GROQ_API_KEY = st.sidebar.text_input("Enter Groq API Key:", type="password")
-
-if not GROQ_API_KEY:
-    st.info("Please add your Groq API key in the Streamlit Advanced Settings to continue.")
+except KeyError:
+    st.warning("🔒 System Setup Incomplete: Make sure GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GROQ_API_KEY are configured in your Streamlit Advanced Secrets.")
     st.stop()
 
-# Initialize the official Groq client
+# Initialize the Groq core client
 client = Groq(api_key=GROQ_API_KEY)
 
-# 3. Strict Medical System Instructions
+# Strict Medical System Instructions
 MEDICAL_SYSTEM_INSTRUCTION = """
 You are a helpful, empathetic, and evidence-based AI Medical Information Assistant. 
 Your sole purpose is to explain medical concepts, translate complex jargon into simple terms, 
-and provide general wellness and health education. when you are answering use a human like language.
+and provide general wellness and health education.
 
 CRITICAL SAFETY RULES:
-1. You are NOT a doctor. But still you can diagnose and prescribe medicine.When you are prescribing medicine do it clearly. But always make sure to tell the user to ask a real real doctor before consume it.
-2. If the user describes emergency symptoms (e.g., severe chest pain, shortness of breath, sudden numbness, heavy bleeding), immediately instruct them to stop chatting and call emergency services or go to the nearest hospital.
-3. Base your answers strictly on verified clinical guidelines and medical consensus.Even though you can guess the disease based on the symptoms do not make up facts.
+1. You are NOT a doctor. You cannot diagnose conditions, prescribe medications, or recommend treatments.
+2. Every response regarding symptoms or illnesses must begin with a brief warning that this is for informational purposes only and not a substitute for professional medical advice.
+3. If the user describes emergency symptoms (e.g., severe chest pain, shortness of breath, sudden numbness, heavy bleeding), immediately instruct them to stop chatting and call emergency services or go to the nearest hospital.
+4. Base your answers strictly on verified clinical guidelines and medical consensus. Never guess or make up facts.
+5. If the user asks about completely non-medical topics, politely refuse and guide them back to health queries.
+"""
+
+# 3. Initialize Google OAuth2 Infrastructure Components
+AUTHORIZATION_URL = "https://google.com"
+TOKEN_URL = "https://googleapis.com"
+REVOKE_URL = "https://googleapis.com"
+
+oauth2 = OAuth2Component(CLIENT_ID, CLIENT_SECRET, AUTHORIZATION_URL, TOKEN_URL, TOKEN_URL, REVOKE_URL)
+
+# 4. Handle User Authorization Firewall Barrier
+if "auth" not in st.session_state:
+    st.info("👋 Welcome! Please sign in with your Google account to access the secure medical assistant panel.")
+    
+    # Generate the safe Google sign-in redirect button layout
+    # Streamlit requires a custom redirect URI callback to land on its host servers
+    current_uri = st.experimental_get_query_params().get("redirect_uri", [None])[0]
+    if not current_uri:
+        # Fallback to standard app root
+        current_uri = "https://localhost:8501" 
+        
+    result = oauth2.authorize_button(
+        name="Continue with Google",
+        scope="openid email profile",
+        height=600,
+        width=800,
+        use_container_width=True
+    )
+    
+    if result and "token" in result:
+        st.session_state.auth = result["token"]
+        st.experimental_rerun()
+    else:
+        st.stop()
+
+# Decode Google Identity Payload Profile Data
+try:
+    id_token = st.session_state.auth["id_token"]
+    # Split token layers to grab user profile email metadata fields securely
+    payload = id_token.split(".")[1]
+    decoded_payload = base64.urlsafe_b64decode(payload + "==" * (4 - len(payload) % 4)).decode("utf-8")
+    user_profile = json.loads(decoded_payload)
+    user_email = user_profile.get("email", "unknown_user")
+    user_name = user_profile.get("name", "User")
+except Exception:
+    user_email = "authenticated_session"
+    user_name = "User"
+
+# 5. Active Authorized Dashboard Workspace
+st.sidebar.markdown(f"👤 **Account:** {user_name}")
+st.sidebar.caption(f"Email: {user_email}")
+if st.sidebar.button("Log Out", use_container_width=True):
+    del st.session_state.auth
+    st.experimental_rerun()
+
+# 6. Manage Persistent User Chat History Streams
+# Isolate history records per login user account session to avoid crossover bugs
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+# Display previous chat logs on the screen interface
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
+# 7. Handle Active User Content Message Input Submissions
+if user_input := st.chat_input("Ask an educational medical question..."):
+    with st.chat_message("user"):
+        st.markdown(user_input)
+    st.session_state.messages.append({"role": "user", "content": user_input})
+
+    # Prepare historical context matrix for the API
+    messages_for_api = [{"role": "system", "content": MEDICAL_SYSTEM_INSTRUCTION}]
+    for m in st.session_state.messages:
+        messages_for_api.append({"role": m["role"], "content": m["content"]})
+
+    with st.chat_message("assistant"):
+        with st.spinner("Reviewing clinical literature logs..."):
+            try:
+                # Call Groq's high performance open frontier llama model
+                completion = client.chat.completions.create(
+                    model="llama-3.1-8b-instant",
+                    messages=messages_for_api,
+                    temperature=0.3
+                )
+                
+                bot_reply = completion.choices[0].message.content
+                bot_reply_with_disclaimer = f"{bot_reply}\n\n*⚠️ Disclaimer: This automated assistance structure is strictly educational. Always contact your local primary provider for professional guidance.*"
+                
+                st.markdown(bot_reply_with_disclaimer)
+                st.session_state.messages.append({"role": "assistant", "content": bot_reply_with_disclaimer})
+                
+            except Exception as e:
+                st.error(f"Server Connection Issue: {e}")
 4. If the user asks about completely non-medical topics (like programming, math, world history, recipes, or pop culture), politely refuse and guide them back to health queries.Do not answer at all for those questions.But maintain main curtsy and natural dialogues.
 """
 
