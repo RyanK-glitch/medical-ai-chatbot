@@ -8,7 +8,7 @@ st.set_page_config(page_title="Secure Medical AI", page_icon="🩺", layout="cen
 st.error("🚨 **EMERGENCY NOTICE:** If you are experiencing a life-threatening medical emergency, please call your local emergency services immediately.")
 
 st.title("🩺 Medical & Health Information Assistant")
-st.caption("A secure, multi-user educational assistant powered by Google Login and Groq.")
+st.caption("A secure educational assistant protected by access key gateways and Groq.")
 
 # 2. Extract Secrets Configuration Check
 try:
@@ -34,25 +34,31 @@ CRITICAL SAFETY RULES:
 5. If the user asks about completely non-medical topics, politely refuse and guide them back to health queries.
 """
 
-# 3. Handle User Authorization Firewall Using Dict-Style Syntax
-# FIXED: Changed from .is_logged_in to dictionary bracket lookups to satisfy the Streamlit core engine
-if not st.user.get("is_logged_in", False):
-    st.info("👋 Welcome! Please sign in with your Google account to access the secure medical assistant panel.")
+# 3. Secure Gateway Password Protection Layout Barrier
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+
+if not st.session_state.logged_in:
+    st.info("👋 Welcome! Please enter your customized application password to access the secure medical assistant panel.")
     
-    # Native login engine - completely stable connection
-    if st.button("Continue with Google", use_container_width=True, type="primary"):
-        st.login("google")
+    # Custom password gateway - set your own passkey below (e.g., "MedicalPass123")
+    user_password = st.text_input("Application Access Token Key:", type="password")
+    
+    if st.button("Unlock Assistant Workspace", use_container_width=True, type="primary"):
+        if user_password == "MedicalPass123": # 👈 Change this to any password you want!
+            st.session_state.logged_in = True
+            st.success("Access Granted! Loading system...")
+            st.rerun()
+        else:
+            st.error("❌ Invalid Access Token: Please check your password and try again.")
     st.stop()
 
-# Get User Profile details natively from the dictionary attributes
-user_name = st.user.get("name", "User")
-user_email = st.user.get("email", "unknown_user")
-
 # 4. Active Authorized Dashboard Workspace Layout
-st.sidebar.markdown(f"👤 **Account:** {user_name}")
-st.sidebar.caption(f"Email: {user_email}")
+st.sidebar.markdown("👤 **Account Active**")
+st.sidebar.caption("Role: Authorized Clinical Reviewer")
 if st.sidebar.button("Log Out", use_container_width=True):
-    st.logout()
+    st.session_state.logged_in = False
+    st.session_state.messages = []
     st.rerun()
 
 # 5. Manage Chat History Memory
@@ -83,7 +89,7 @@ if user_input := st.chat_input("Ask an educational medical question..."):
                     temperature=0.3
                 )
                 
-                bot_reply = completion.choices[0].message.content
+                bot_reply = completion.choices.message.content
                 bot_reply_with_disclaimer = f"{bot_reply}\n\n*⚠️ Disclaimer: This automated assistance structure is strictly educational. Always contact your local primary provider for professional guidance.*"
                 
                 st.markdown(bot_reply_with_disclaimer)
