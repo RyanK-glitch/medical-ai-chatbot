@@ -1,8 +1,5 @@
 import streamlit as st
 from groq import Groq
-from streamlit_oauth import OAuth2Component
-import json
-import base64
 
 # 1. Main Page Layout Configuration
 st.set_page_config(page_title="Secure Medical AI", page_icon="🩺", layout="centered")
@@ -15,11 +12,9 @@ st.caption("A secure, multi-user educational assistant powered by Google Login a
 
 # 2. Extract Secrets Configuration Check
 try:
-    CLIENT_ID = st.secrets["GOOGLE_CLIENT_ID"]
-    CLIENT_SECRET = st.secrets["GOOGLE_CLIENT_SECRET"]
     GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 except KeyError:
-    st.warning("🔒 System Setup Incomplete: Make sure GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GROQ_API_KEY are configured in your Streamlit Advanced Secrets.")
+    st.warning("🔒 System Setup Incomplete: Make sure GROQ_API_KEY is configured in your Streamlit Advanced Secrets.")
     st.stop()
 
 # Initialize the Groq core client
@@ -39,55 +34,27 @@ CRITICAL SAFETY RULES:
 5. If the user asks about completely non-medical topics, politely refuse and guide them back to health queries.
 """
 
-# 3. Initialize Google OAuth2 Infrastructure Components
-AUTHORIZATION_URL = "https://google.com"
-TOKEN_URL = "https://googleapis.com"
-REVOKE_URL = "https://googleapis.com"
-
-oauth2 = OAuth2Component(CLIENT_ID, CLIENT_SECRET, AUTHORIZATION_URL, TOKEN_URL, TOKEN_URL, REVOKE_URL)
-
-# 4. Handle User Authorization Firewall Barrier
-if "auth" not in st.session_state:
+# 3. Handle User Authorization Firewall Using Native Streamlit Auth
+if not st.experimental_user.is_logged_in:
     st.info("👋 Welcome! Please sign in with your Google account to access the secure medical assistant panel.")
     
-    # Dynamically extract the app's current running URL to feed into the login link
-    # This automatically matches your custom .streamlit.app address
-    app_url = st.nav_to if hasattr(st, "nav_to") else "https://localhost:8501"
-    
-    # FIXED: Added the mandatory redirect_uri parameter to prevent the TypeError
-    result = oauth2.authorize_button(
-        name="Continue with Google",
-        scope="openid email profile",
-        redirect_uri="https://streamlit.app", # 👈 Replace this URL string with your actual live app link if different!
-        use_container_width=True
-    )
-    
-    if result and "token" in result:
-        st.session_state.auth = result["token"]
-        st.rerun()
-    else:
-        st.stop()
+    # Native login engine - completely bypasses the broken popups
+    if st.button("Continue with Google", use_container_width=True, type="primary"):
+        st.login("google")
+    st.stop()
 
-# Decode Google Identity Payload Profile Data
-try:
-    id_token = st.session_state.auth["id_token"]
-    payload = id_token.split(".")
-    decoded_payload = base64.urlsafe_b64decode(payload + "==" * (4 - len(payload) % 4)).decode("utf-8")
-    user_profile = json.loads(decoded_payload)
-    user_email = user_profile.get("email", "unknown_user")
-    user_name = user_profile.get("name", "User")
-except Exception:
-    user_email = "authenticated_session"
-    user_name = "User"
+# Get User Profile details natively from the login token
+user_name = st.experimental_user.get("name", "User")
+user_email = st.experimental_user.get("email", "unknown_user")
 
-# 5. Active Authorized Dashboard Workspace Layout
+# 4. Active Authorized Dashboard Workspace Layout
 st.sidebar.markdown(f"👤 **Account:** {user_name}")
 st.sidebar.caption(f"Email: {user_email}")
 if st.sidebar.button("Log Out", use_container_width=True):
-    del st.session_state.auth
+    st.logout()
     st.rerun()
 
-# 6. Manage Chat History Memory
+# 5. Manage Chat History Memory
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -96,7 +63,7 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# 7. Handle Active User Content Message Input Submissions
+# 6. Handle Active User Content Message Input Submissions
 if user_input := st.chat_input("Ask an educational medical question..."):
     with st.chat_message("user"):
         st.markdown(user_input)
