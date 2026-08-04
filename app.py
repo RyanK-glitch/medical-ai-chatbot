@@ -34,18 +34,18 @@ CRITICAL SAFETY RULES:
 5. If the user asks about completely non-medical topics, politely refuse and guide them back to health queries.
 """
 
-# 3. Handle User Authorization Firewall Using Native Streamlit Auth
-if not st.experimental_user.is_logged_in:
+# 3. Handle User Authorization Firewall Using Correct Streamlit Auth API
+if not st.user.is_logged_in:
     st.info("👋 Welcome! Please sign in with your Google account to access the secure medical assistant panel.")
     
-    # Native login engine - completely bypasses the broken popups
+    # Native login engine - completely stable connection
     if st.button("Continue with Google", use_container_width=True, type="primary"):
         st.login("google")
     st.stop()
 
 # Get User Profile details natively from the login token
-user_name = st.experimental_user.get("name", "User")
-user_email = st.experimental_user.get("email", "unknown_user")
+user_name = st.user.get("name", "User")
+user_email = st.user.get("email", "unknown_user")
 
 # 4. Active Authorized Dashboard Workspace Layout
 st.sidebar.markdown(f"👤 **Account:** {user_name}")
