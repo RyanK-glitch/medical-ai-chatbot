@@ -64,7 +64,7 @@ if user_input := st.chat_input("Ask a medical question (e.g., Explain what a sod
             try:
                 # Call Gemini 2.5 Flash with the safety config parameters
                 response = client.models.generate_content(
-                    model="gemini-2.5-flash",
+                    model="gemini-2.0-flash",
                     contents=api_messages,
                     config=types.GenerateContentConfig(
                         system_instruction=MEDICAL_SYSTEM_INSTRUCTION,
